@@ -1,16 +1,17 @@
 package com.termux.view.textselection;
 
-import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Rect;
+import android.os.Build;
 import android.text.TextUtils;
 import android.view.ActionMode;
-import android.view.InputDevice;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
+
+import androidx.annotation.Nullable;
 
 import com.termux.terminal.TerminalBuffer;
 import com.termux.terminal.WcWidth;
@@ -21,6 +22,7 @@ public class TextSelectionCursorController implements CursorController {
 
     private final TerminalView terminalView;
     private final TextSelectionHandleView mStartHandle, mEndHandle;
+    private String mStoredSelectedText;
     private boolean mIsSelectingText = false;
     private long mShowStartTime = System.currentTimeMillis();
 
@@ -28,9 +30,9 @@ public class TextSelectionCursorController implements CursorController {
     private int mSelX1 = -1, mSelX2 = -1, mSelY1 = -1, mSelY2 = -1;
 
     private ActionMode mActionMode;
-    private final int ACTION_COPY = 1;
-    private final int ACTION_PASTE = 2;
-    private final int ACTION_MORE = 3;
+    public final int ACTION_COPY = 1;
+    public final int ACTION_PASTE = 2;
+    public final int ACTION_MORE = 3;
 
     public TextSelectionCursorController(TerminalView terminalView) {
         this.terminalView = terminalView;
@@ -89,14 +91,9 @@ public class TextSelectionCursorController implements CursorController {
     }
 
     public void setInitialTextSelectionPosition(MotionEvent event) {
-        int cx = (int) (event.getX() / terminalView.mRenderer.getFontWidth());
-        final boolean eventFromMouse = event.isFromSource(InputDevice.SOURCE_MOUSE);
-        // Offset for finger:
-        final int SELECT_TEXT_OFFSET_Y = eventFromMouse ? 0 : -40;
-        int cy = (int) ((event.getY() + SELECT_TEXT_OFFSET_Y) / terminalView.mRenderer.getFontLineSpacing()) + terminalView.getTopRow();
-
-        mSelX1 = mSelX2 = cx;
-        mSelY1 = mSelY2 = cy;
+        int[] columnAndRow = terminalView.getColumnAndRow(event, true);
+        mSelX1 = mSelX2 = columnAndRow[0];
+        mSelY1 = mSelY2 = columnAndRow[1];
 
         TerminalBuffer screen = terminalView.mEmulator.getScreen();
         if (!" ".equals(screen.getSelectedText(mSelX1, mSelY1, mSelX1, mSelY1))) {
@@ -118,7 +115,7 @@ public class TextSelectionCursorController implements CursorController {
 
                 ClipboardManager clipboard = (ClipboardManager) terminalView.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
                 menu.add(Menu.NONE, ACTION_COPY, Menu.NONE, R.string.copy_text).setShowAsAction(show);
-                menu.add(Menu.NONE, ACTION_PASTE, Menu.NONE, R.string.paste_text).setEnabled(clipboard.hasPrimaryClip()).setShowAsAction(show);
+                menu.add(Menu.NONE, ACTION_PASTE, Menu.NONE, R.string.paste_text).setEnabled(clipboard != null && clipboard.hasPrimaryClip()).setShowAsAction(show);
                 menu.add(Menu.NONE, ACTION_MORE, Menu.NONE, R.string.text_selection_more);
                 return true;
             }
@@ -137,21 +134,22 @@ public class TextSelectionCursorController implements CursorController {
 
                 switch (item.getItemId()) {
                     case ACTION_COPY:
-                        String selectedText = terminalView.mEmulator.getSelectedText(mSelX1, mSelY1, mSelX2, mSelY2).trim();
-                        terminalView.mTermSession.clipboardText(selectedText);
+                        String selectedText = getSelectedText();
+                        terminalView.mTermSession.onCopyTextToClipboard(selectedText);
                         terminalView.stopTextSelectionMode();
                         break;
                     case ACTION_PASTE:
                         terminalView.stopTextSelectionMode();
-                        ClipboardManager clipboard = (ClipboardManager) terminalView.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
-                        ClipData clipData = clipboard.getPrimaryClip();
-                        if (clipData != null) {
-                            CharSequence paste = clipData.getItemAt(0).coerceToText(terminalView.getContext());
-                            if (!TextUtils.isEmpty(paste)) terminalView.mEmulator.paste(paste.toString());
-                        }
+                        terminalView.mTermSession.onPasteTextFromClipboard();
                         break;
                     case ACTION_MORE:
-                        terminalView.stopTextSelectionMode(); //we stop text selection first, otherwise handles will show above popup
+                        // We first store the selected text in case TerminalViewClient needs the
+                        // selected text before MORE button was pressed since we are going to
+                        // stop selection mode
+                        mStoredSelectedText = getSelectedText();
+                        // The text selection needs to be stopped before showing context menu,
+                        // otherwise handles will show above popup
+                        terminalView.stopTextSelectionMode();
                         terminalView.showContextMenu();
                         break;
                 }
@@ -165,6 +163,12 @@ public class TextSelectionCursorController implements CursorController {
 
         };
 
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            mActionMode = terminalView.startActionMode(callback);
+            return;
+        }
+
+        //noinspection NewApi
         mActionMode = terminalView.startActionMode(new ActionMode.Callback2() {
             @Override
             public boolean onCreateActionMode(ActionMode mode, Menu menu) {
@@ -193,14 +197,19 @@ public class TextSelectionCursorController implements CursorController {
                 int y1 = Math.round((mSelY1 - 1 - terminalView.getTopRow()) * terminalView.mRenderer.getFontLineSpacing());
                 int y2 = Math.round((mSelY2 + 1 - terminalView.getTopRow()) * terminalView.mRenderer.getFontLineSpacing());
 
-
                 if (x1 > x2) {
                     int tmp = x1;
                     x1 = x2;
                     x2 = tmp;
                 }
 
-                outRect.set(x1, y1 + mHandleHeight, x2, y2 + mHandleHeight);
+                int terminalBottom = terminalView.getBottom();
+                int top = y1 + mHandleHeight;
+                int bottom = y2 + mHandleHeight;
+                if (top > terminalBottom) top = terminalBottom;
+                if (bottom > terminalBottom) bottom = terminalBottom;
+
+                outRect.set(x1, top, x2, bottom);
             }
         }, ActionMode.TYPE_FLOATING);
     }
@@ -359,6 +368,22 @@ public class TextSelectionCursorController implements CursorController {
         sel[1] = mSelY2;
         sel[2] = mSelX1;
         sel[3] = mSelX2;
+    }
+
+    /** Get the currently selected text. */
+    public String getSelectedText() {
+        return terminalView.mEmulator.getSelectedText(mSelX1, mSelY1, mSelX2, mSelY2);
+    }
+
+    /** Get the selected text stored before "MORE" button was pressed on the context menu. */
+    @Nullable
+    public String getStoredSelectedText() {
+        return mStoredSelectedText;
+    }
+
+    /** Unset the selected text stored before "MORE" button was pressed on the context menu. */
+    public void unsetStoredSelectedText() {
+        mStoredSelectedText = null;
     }
 
     public ActionMode getActionMode() {

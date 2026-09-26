@@ -1,5 +1,8 @@
 package com.termux.terminal;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 /**
  * The interface for communication between {@link TerminalSession} and its client. It is used to
  * send callbacks to the client when {@link TerminalSession} changes or for sending other
@@ -7,17 +10,28 @@ package com.termux.terminal;
  */
 public interface TerminalSessionClient {
 
-    void onTextChanged(TerminalSession changedSession);
+    void onTextChanged(@NonNull TerminalSession changedSession);
 
-    void onTitleChanged(TerminalSession changedSession);
+    void onTitleChanged(@NonNull TerminalSession changedSession);
 
-    void onSessionFinished(TerminalSession finishedSession);
+    void onSessionFinished(@NonNull TerminalSession finishedSession);
 
-    void onClipboardText(TerminalSession session, String text);
+    void onCopyTextToClipboard(@NonNull TerminalSession session, String text);
 
-    void onBell(TerminalSession session);
+    void onPasteTextFromClipboard(@Nullable TerminalSession session);
 
-    void onColorsChanged(TerminalSession session);
+    void onBell(@NonNull TerminalSession session);
+
+    void onColorsChanged(@NonNull TerminalSession session);
+
+    void onTerminalCursorStateChange(boolean state);
+
+    void setTerminalShellPid(@NonNull TerminalSession session, int pid);
+
+
+
+    Integer getTerminalCursorStyle();
+
 
 
     void logError(String tag, String message);

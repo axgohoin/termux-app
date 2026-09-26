@@ -82,6 +82,7 @@ public class FileTypes {
      *                       returned.
      * @return Returns the {@link FileType} of file.
      */
+    @NonNull
     public static FileType getFileType(final String filePath, final boolean followLinks) {
         if (filePath == null || filePath.isEmpty()) return FileType.NO_EXIST;
 
@@ -90,7 +91,7 @@ public class FileTypes {
             return getFileType(fileAttributes);
         } catch (Exception e) {
             // If not a ENOENT (No such file or directory) exception
-            if (!e.getMessage().contains("ENOENT"))
+            if (e.getMessage() != null && !e.getMessage().contains("ENOENT"))
                 Logger.logError("Failed to get file type for file at path \"" + filePath + "\": " + e.getMessage());
             return FileType.NO_EXIST;
         }
@@ -103,6 +104,8 @@ public class FileTypes {
             return FileType.DIRECTORY;
         else if (fileAttributes.isSymbolicLink())
             return FileType.SYMLINK;
+        else if (fileAttributes.isSocket())
+            return FileType.SOCKET;
         else if (fileAttributes.isCharacter())
             return FileType.CHARACTER;
         else if (fileAttributes.isFifo())

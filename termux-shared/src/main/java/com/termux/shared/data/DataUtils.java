@@ -2,13 +2,23 @@ package com.termux.shared.data;
 
 import android.os.Bundle;
 
-import java.util.LinkedHashSet;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.google.common.base.Strings;
+
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.Collections;
 
 public class DataUtils {
 
+    /** Max safe limit of data size to prevent TransactionTooLargeException when transferring data
+     * inside or to other apps via transactions. */
     public static final int TRANSACTION_SIZE_LIMIT_IN_BYTES = 100 * 1024; // 100KB
+
+    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
 
     public static String getTruncatedCommandOutput(String text, int maxLength, boolean fromEnd, boolean onNewline, boolean addPrefix) {
         if (text == null) return null;
@@ -21,7 +31,7 @@ public class DataUtils {
         if (maxLength < 0 || text.length() < maxLength) return text;
 
         if (fromEnd) {
-            text = text.substring(0, Math.min(text.length(), maxLength));
+            text = text.substring(0, maxLength);
         } else {
             int cutOffIndex = text.length() - maxLength;
 
@@ -41,9 +51,24 @@ public class DataUtils {
     }
 
     /**
+     * Replace a sub string in each item of a {@link String[]}.
+     *
+     * @param array The {@link String[]} to replace in.
+     * @param find The sub string to replace.
+     * @param replace The sub string to replace with.
+     */
+    public static void replaceSubStringsInStringArrayItems(String[] array, String find, String replace) {
+        if(array == null || array.length == 0) return;
+
+        for (int i = 0; i < array.length; i++) {
+            array[i] = array[i].replace(find, replace);
+        }
+    }
+
+    /**
      * Get the {@code float} from a {@link String}.
      *
-     * @param value The {@link String value.
+     * @param value The {@link String} value.
      * @param def The default value if failed to read a valid value.
      * @return Returns the {@code float} value after parsing the {@link String} value, otherwise
      * returns default if failed to read a valid value, like in case of an exception.
@@ -62,7 +87,7 @@ public class DataUtils {
     /**
      * Get the {@code int} from a {@link String}.
      *
-     * @param value The {@link String value.
+     * @param value The {@link String} value.
      * @param def The default value if failed to read a valid value.
      * @return Returns the {@code int} value after parsing the {@link String} value, otherwise
      * returns default if failed to read a valid value, like in case of an exception.
@@ -76,6 +101,33 @@ public class DataUtils {
         catch (Exception e) {
             return def;
         }
+    }
+
+    /**
+     * Get the {@code String} from an {@link Integer}.
+     *
+     * @param value The {@link Integer} value.
+     * @param def The default {@link String} value.
+     * @return Returns {@code value} if it is not {@code null}, otherwise returns {@code def}.
+     */
+    public static String getStringFromInteger(Integer value, String def) {
+        return (value == null) ? def : String.valueOf((int) value);
+    }
+
+    /**
+     * Get the {@code hex string} from a {@link byte[]}.
+     *
+     * @param bytes The {@link byte[]} value.
+     * @return Returns the {@code hex string} value.
+     */
+    public static String bytesToHex(byte[] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+        }
+        return new String(hexChars);
     }
 
     /**
@@ -115,103 +167,92 @@ public class DataUtils {
 
 
     /**
+     * Add a space indent to a {@link String}. Each indent is 4 space characters long.
+     *
+     * @param string The {@link String} to add indent to.
+     * @param count The indent count.
+     * @return Returns the indented {@link String}.
+     */
+    public static String getSpaceIndentedString(String string, int count) {
+        if (string == null || string.isEmpty())
+            return string;
+        else
+            return getIndentedString(string, "    ", count);
+    }
+
+    /**
+     * Add a tab indent to a {@link String}. Each indent is 1 tab character long.
+     *
+     * @param string The {@link String} to add indent to.
+     * @param count The indent count.
+     * @return Returns the indented {@link String}.
+     */
+    public static String getTabIndentedString(String string, int count) {
+        if (string == null || string.isEmpty())
+            return string;
+        else
+            return getIndentedString(string, "\t", count);
+    }
+
+    /**
+     * Add an indent to a {@link String}.
+     *
+     * @param string The {@link String} to add indent to.
+     * @param indent The indent characters.
+     * @param count The indent count.
+     * @return Returns the indented {@link String}.
+     */
+    public static String getIndentedString(String string, @NonNull String indent, int count) {
+        if (string == null || string.isEmpty())
+            return string;
+        else
+            return string.replaceAll("(?m)^", Strings.repeat(indent, Math.max(count, 1)));
+    }
+
+
+
+    /**
      * Get the object itself if it is not {@code null}, otherwise default.
      *
      * @param object The {@link Object} to check.
      * @param def The default {@link Object}.
      * @return Returns {@code object} if it is not {@code null}, otherwise returns {@code def}.
      */
-    public static <T> T getDefaultIfNull(@androidx.annotation.Nullable T object, @androidx.annotation.Nullable T def) {
+    public static <T> T getDefaultIfNull(@Nullable T object, @Nullable T def) {
         return (object == null) ? def : object;
+    }
+
+    /**
+     * Get the {@link String} itself if it is not {@code null} or empty, otherwise default.
+     *
+     * @param value The {@link String} to check.
+     * @param def The default {@link String}.
+     * @return Returns {@code value} if it is not {@code null} or empty, otherwise returns {@code def}.
+     */
+    public static String getDefaultIfUnset(@Nullable String value, String def) {
+        return (value == null || value.isEmpty()) ? def : value;
+    }
+
+    /** Check if a string is null or empty. */
+    public static boolean isNullOrEmpty(String string) {
+        return string == null || string.isEmpty();
     }
 
 
 
-    public static LinkedHashSet<CharSequence> extractUrls(String text) {
-
-        StringBuilder regex_sb = new StringBuilder();
-
-        regex_sb.append("(");                       // Begin first matching group.
-        regex_sb.append("(?:");                     // Begin scheme group.
-        regex_sb.append("dav|");                    // The DAV proto.
-        regex_sb.append("dict|");                   // The DICT proto.
-        regex_sb.append("dns|");                    // The DNS proto.
-        regex_sb.append("file|");                   // File path.
-        regex_sb.append("finger|");                 // The Finger proto.
-        regex_sb.append("ftp(?:s?)|");              // The FTP proto.
-        regex_sb.append("git|");                    // The Git proto.
-        regex_sb.append("gopher|");                 // The Gopher proto.
-        regex_sb.append("http(?:s?)|");             // The HTTP proto.
-        regex_sb.append("imap(?:s?)|");             // The IMAP proto.
-        regex_sb.append("irc(?:[6s]?)|");           // The IRC proto.
-        regex_sb.append("ip[fn]s|");                // The IPFS proto.
-        regex_sb.append("ldap(?:s?)|");             // The LDAP proto.
-        regex_sb.append("pop3(?:s?)|");             // The POP3 proto.
-        regex_sb.append("redis(?:s?)|");            // The Redis proto.
-        regex_sb.append("rsync|");                  // The Rsync proto.
-        regex_sb.append("rtsp(?:[su]?)|");          // The RTSP proto.
-        regex_sb.append("sftp|");                   // The SFTP proto.
-        regex_sb.append("smb(?:s?)|");              // The SAMBA proto.
-        regex_sb.append("smtp(?:s?)|");             // The SMTP proto.
-        regex_sb.append("svn(?:(?:\\+ssh)?)|");     // The Subversion proto.
-        regex_sb.append("tcp|");                    // The TCP proto.
-        regex_sb.append("telnet|");                 // The Telnet proto.
-        regex_sb.append("tftp|");                   // The TFTP proto.
-        regex_sb.append("udp|");                    // The UDP proto.
-        regex_sb.append("vnc|");                    // The VNC proto.
-        regex_sb.append("ws(?:s?)");                // The Websocket proto.
-        regex_sb.append(")://");                    // End scheme group.
-        regex_sb.append(")");                       // End first matching group.
-
-
-        // Begin second matching group.
-        regex_sb.append("(");
-
-        // User name and/or password in format 'user:pass@'.
-        regex_sb.append("(?:\\S+(?::\\S*)?@)?");
-
-        // Begin host group.
-        regex_sb.append("(?:");
-
-        // IP address (from http://www.regular-expressions.info/examples.html).
-        regex_sb.append("(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)|");
-
-        // Host name or domain.
-        regex_sb.append("(?:(?:[a-z\\u00a1-\\uffff0-9]-*)*[a-z\\u00a1-\\uffff0-9]+)(?:(?:\\.(?:[a-z\\u00a1-\\uffff0-9]-*)*[a-z\\u00a1-\\uffff0-9]+)*(?:\\.(?:[a-z\\u00a1-\\uffff]{2,})))?|");
-
-        // Just path. Used in case of 'file://' scheme.
-        regex_sb.append("/(?:(?:[a-z\\u00a1-\\uffff0-9]-*)*[a-z\\u00a1-\\uffff0-9]+)");
-
-        // End host group.
-        regex_sb.append(")");
-
-        // Port number.
-        regex_sb.append("(?::\\d{1,5})?");
-
-        // Resource path with optional query string.
-        regex_sb.append("(?:/[a-zA-Z0-9:@%\\-._~!$&()*+,;=?/]*)?");
-
-        // Fragment.
-        regex_sb.append("(?:#[a-zA-Z0-9:@%\\-._~!$&()*+,;=?/]*)?");
-
-        // End second matching group.
-        regex_sb.append(")");
-
-        final Pattern urlPattern = Pattern.compile(
-            regex_sb.toString(),
-            Pattern.CASE_INSENSITIVE | Pattern.MULTILINE | Pattern.DOTALL);
-
-        LinkedHashSet<CharSequence> urlSet = new LinkedHashSet<>();
-        Matcher matcher = urlPattern.matcher(text);
-
-        while (matcher.find()) {
-            int matchStart = matcher.start(1);
-            int matchEnd = matcher.end();
-            String url = text.substring(matchStart, matchEnd);
-            urlSet.add(url);
+    /** Get size of a serializable object. */
+    public static long getSerializedSize(Serializable object) {
+        if (object == null) return 0;
+        try {
+            ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteOutputStream);
+            objectOutputStream.writeObject(object);
+            objectOutputStream.flush();
+            objectOutputStream.close();
+            return byteOutputStream.toByteArray().length;
+        } catch (Exception e) {
+            return -1;
         }
-
-        return urlSet;
     }
 
 }

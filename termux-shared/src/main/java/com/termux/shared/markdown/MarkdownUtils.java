@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat;
 
 import com.google.common.base.Strings;
 import com.termux.shared.R;
+import com.termux.shared.theme.ThemeUtils;
 
 import org.commonmark.ext.gfm.strikethrough.Strikethrough;
 import org.commonmark.node.BlockQuote;
@@ -90,10 +91,12 @@ public class MarkdownUtils {
 
         int maxCount = 0;
         int matchCount;
+        String match;
 
         Matcher matcher = backticksPattern.matcher(string);
         while(matcher.find()) {
-            matchCount = matcher.group(1).length();
+            match = matcher.group(1);
+            matchCount = match != null ? match.length() : 0;
             if (matchCount > maxCount)
                 maxCount = matchCount;
         }
@@ -102,6 +105,10 @@ public class MarkdownUtils {
     }
 
 
+
+    public static String getLiteralSingleLineMarkdownStringEntry(String label, Object object, String def) {
+        return "**" + label + "**: " + (object != null ? object.toString() : def) +  "  ";
+    }
 
     public static String getSingleLineMarkdownStringEntry(String label, Object object, String def) {
         if (object != null)
@@ -117,9 +124,9 @@ public class MarkdownUtils {
             return "**" + label + "**: " + def + "\n";
     }
 
-    public static String getLinkMarkdownString(String label, Object object) {
-        if (object != null)
-            return "[" + label + "](" + object +  ")";
+    public static String getLinkMarkdownString(String label, String url) {
+        if (url != null)
+            return "[" + label.replaceAll("]", "\\\\]") + "](" + url.replaceAll("\\)", "\\\\)") +  ")";
         else
             return label;
     }
@@ -150,11 +157,14 @@ public class MarkdownUtils {
 
                 @Override
                 public void configureSpansFactory(@NonNull MarkwonSpansFactory.Builder builder) {
-                    builder
-                        // set color for inline code
-                        .setFactory(Code.class, (configuration, props) -> new Object[]{
-                            new BackgroundColorSpan(ContextCompat.getColor(context, R.color.background_markdown_code_inline)),
-                        });
+                    // Do not change color for night themes
+                    if (!ThemeUtils.isNightModeEnabled(context)) {
+                        builder
+                            // set color for inline code
+                            .setFactory(Code.class, (configuration, props) -> new Object[]{
+                                new BackgroundColorSpan(ContextCompat.getColor(context, R.color.background_markdown_code_inline)),
+                            });
+                    }
                 }
             })
             .build();
@@ -179,7 +189,7 @@ public class MarkdownUtils {
                             .setFactory(Code.class, (configuration, props) -> new Object[]{
                                 new BackgroundColorSpan(ContextCompat.getColor(context, R.color.background_markdown_code_inline)),
                                 new TypefaceSpan("monospace"),
-                                new AbsoluteSizeSpan(8)
+                                new AbsoluteSizeSpan(48)
                             })
                             // NB! both ordered and bullet list items
                             .setFactory(ListItem.class, (configuration, props) -> new BulletSpan());
@@ -189,9 +199,8 @@ public class MarkdownUtils {
     }
 
     public static Spanned getSpannedMarkdownText(Context context, String string) {
-
+        if (context == null || string == null) return null;
         final Markwon markwon = getSpannedMarkwonBuilder(context);
-
         return markwon.toMarkdown(string);
     }
 

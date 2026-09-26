@@ -1,6 +1,5 @@
 package com.termux.app.activities;
 
-import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
@@ -12,8 +11,12 @@ import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.termux.shared.termux.TermuxConstants;
+
 /** Basic embedded browser for viewing help pages. */
-public final class HelpActivity extends Activity {
+public final class HelpActivity extends AppCompatActivity {
 
     WebView mWebView;
 
@@ -32,14 +35,13 @@ public final class HelpActivity extends Activity {
         mWebView = new WebView(this);
         WebSettings settings = mWebView.getSettings();
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
-        settings.setAppCacheEnabled(false);
         setContentView(progressLayout);
         mWebView.clearCache(true);
 
         mWebView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                if (url.startsWith("https://wiki.termux.com")) {
+                if (url.equals(TermuxConstants.TERMUX_WIKI_URL) || url.startsWith(TermuxConstants.TERMUX_WIKI_URL + "/")) {
                     // Inline help.
                     setContentView(progressLayout);
                     return false;
@@ -60,7 +62,7 @@ public final class HelpActivity extends Activity {
                 setContentView(mWebView);
             }
         });
-        mWebView.loadUrl("https://wiki.termux.com/wiki/Main_Page");
+        mWebView.loadUrl(TermuxConstants.TERMUX_WIKI_URL);
     }
 
     @Override
